@@ -8,4 +8,4 @@ version = "0.1.0"
 description = "A base library for making use of classes that has commonly used and modular functions and variables."
 readme = "README.md"
 requires-python = ">=3.14"
-dependincies = [] # pip packages goes here.
+# dependincies = [] # pip packages goes here.
