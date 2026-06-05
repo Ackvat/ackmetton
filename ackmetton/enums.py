@@ -1,7 +1,7 @@
-from enum import Enum
+from enum import Enum, IntEnum
 
 
-class PRINT_LEVELS(Enum):
+class FEED_LEVELS(IntEnum):
     NOTSET = 0
     DEBUG = 10
     INFO = 20
@@ -10,3 +10,4 @@ class PRINT_LEVELS(Enum):
     ERROR = 40
     CRIT = 50
     CRITICAL = 50
+    FATAL = 50
