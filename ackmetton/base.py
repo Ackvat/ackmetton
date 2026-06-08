@@ -98,7 +98,7 @@ class Printer(Base):
 
 
 # The very first class that is capable of printing and logging.
-class Adem(Base):
+class Logged(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.logger = kwargs.get("logger", None)
@@ -109,7 +109,7 @@ class Adem(Base):
 
 
 test_logger = Logger(logger_name="testlog")
-test = Adem(name="TEST", logger=test_logger)
+test = Logged(name="TEST", logger=test_logger)
 test.log.debug("Hello World!")
 test.log.info("Hello World!")
 test.log.warn("Hello World!")
