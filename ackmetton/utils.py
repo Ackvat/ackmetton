@@ -1,0 +1,29 @@
+import time
+
+
+class TimeStamp:
+    def __init__(self, **kwargs):
+        self.unit_mask = kwargs.get("unit_mask", 1000.0)
+
+        self.start = 0
+        self.end = 0
+        self.delta = 0
+
+        self.set_start()
+        self.set_end()
+
+    def set_start(self):
+        self.start = time.time() * self.unit_mask
+        return self.start
+
+    def set_end(self):
+        self.end = time.time() * self.unit_mask
+        return self.end
+
+    def set_delta(self):
+        self.delta = self.end - self.start
+        return self.delta
+
+    def get_delta(self):
+        self.set_end()
+        return self.set_delta()

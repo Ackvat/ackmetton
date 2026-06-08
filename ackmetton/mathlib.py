@@ -397,3 +397,55 @@ class Quaternion:
 
     def clone(self):
         return Quaternion(self.x, self.y, self.z, self.w)
+
+
+class PID:
+    def __init__(self, **kwargs):
+        self.kp = kwargs.get("kp", 0)
+        self.ki = kwargs.get("ki", 0)
+        self.kd = kwargs.get("kd", 0)
+        self.g = kwargs.get("g", 1)
+
+        self.proportional = 0
+        self.integral = 0
+        self.differential = 0
+
+        self.integral_min = -float("inf")
+        self.integral_max = float("inf")
+
+        self.set_point = kwargs.get("set_point", 0)
+        self.output = 0
+        self.error = 0
+        self.previous_error = 0
+
+        self.min_dt = 0.001
+
+    def update(self, measured_value, dt):
+        self.error = self.set_point - measured_value
+        self.proportional = self.error
+        self.integral = clamp(
+            self.integral + self.error * dt, self.integral_min, self.integral_max
+        )
+        self.differential = (self.error - self.previous_error) / dt
+
+        self.output = self.g * (
+            self.proportional * self.kp
+            + self.integral * self.ki
+            + self.differential * self.kd
+        )
+
+        self.previous_error = self.error
+
+        return self.output
+
+    def set_integral_clamp(self, min, max):
+        self.integral_min = min
+        self.integral_max = max
+
+    def reset(self):
+        self.proportional = 0
+        self.integral = 0
+        self.differential = 0
+        self.error = 0
+        self.previous_error = 0
+        self.output = 0
