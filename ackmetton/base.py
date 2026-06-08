@@ -1,17 +1,28 @@
-import os
-import logging
+from platform import is_python, is_micropython
+
+if is_python():
+    import os
+    import logging
+
 from datetime import datetime
 
 from enums import FEED_LEVELS
 
 
+# The very base class that consist variables and methods that shall be owned by all the other classes in this project library.
 class Base:
     def __init__(self, **kwargs):
         self.name = kwargs.get("name", "NONAME")
 
 
+# A general logger that can be used by multiple classes at the same time. The classes log with their names through the logger via a wrapper set below.
 class Logger(Base):
     def __init__(self, **kwargs):
+        if is_micropython():
+            raise ImportError(
+                "Logger unavailable on MicroPython, requires stdlib 'logging'"
+            )
+
         super().__init__(**kwargs)
         self.logger_name: str = kwargs.get("logger_name", "nonamelog").strip().lower()
         self.logger = kwargs.get("logger", logging.getLogger(self.logger_name))
@@ -47,6 +58,7 @@ class Logger(Base):
         self.logger.error(self.format(name, msg))
 
 
+# This is the logger wrapper that allows easy calling of the logger functions from classes equal ro higher than Adem.
 class LogWrap:
     def __init__(self, logger, name):
         self._logger = logger
@@ -65,13 +77,17 @@ class LogWrap:
 class Printer(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.print_name: str = kwargs.get("print_name", "baseprint").strip().lower()
-        self.print_level = kwargs.get("print_level", FEED_LEVELS.DEBUG)
+        self.printer_name: str = (
+            kwargs.get("printer_name", "nonameprint").strip().lower()
+        )
+        self.printer_level = kwargs.get("printer_level", FEED_LEVELS.DEBUG)
+
+        # The formattings for the prinings.
         self.time_now = lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         self.format = lambda time, level, msg: f"{time} | [{level}] {msg}"
 
     def debug(self, msg):
-        if self.print_level >= FEED_LEVELS.DEBUG:
+        if self.printer_level >= FEED_LEVELS.DEBUG:
             print(
                 self.format(
                     time=self.time_now(),
@@ -81,13 +97,14 @@ class Printer(Base):
             )
 
 
+# The very first class that is capable of printing and logging.
 class Adem(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.logger = kwargs.get("logger", None)
         self.print = kwargs.get("printer", None)
 
-        if self.logger:
+        if self.logger and is_python():
             self.log = LogWrap(self.logger, self.name)
 
 
