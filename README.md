@@ -58,7 +58,15 @@ ackmetton provides a modular, reusable foundation of math primitives, control al
 pip install ackmetton
 ```
 
-Or copy the `ackmetton/` package directly into your project for embedded/MicroPython targets.
+Or copy `src/ackmetton/` directly into your project for embedded/MicroPython targets.
+
+### Installing from source
+
+```bash
+git clone https://github.com/<your-org>/ackmetton.git
+cd ackmetton
+pip install .
+```
 
 ## Quick Start
 
@@ -84,13 +92,14 @@ ackmetton is designed for cross-platform use. Modules that rely on CPython stdli
 ## Project Structure
 
 ```
-ackmetton/
-├── __init__.py
-├── base.py        # Base, Logger, LogWrap, Printer, Adem
-├── enums.py       # FEED_LEVELS
-├── mathlib.py     # Math utilities, vectors, quaternions, PID
-├── platform.py    # is_micropython(), is_python()
-└── utils.py       # TimeStamp
+src/
+└── ackmetton/
+    ├── __init__.py
+    ├── base.py        # Base, Logger, LogWrap, Printer
+    ├── enums.py       # FEED_LEVELS
+    ├── mathlib.py     # Math utilities, vectors, quaternions, PID
+    ├── platform.py    # is_micropython(), is_python()
+    └── utils.py       # TimeStamp
 ```
 
 ## License
