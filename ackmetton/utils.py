@@ -1,6 +1,9 @@
 import time
 
+from queue import Queue, Full
 
+
+# A class for measuring a delta time by stamping it with a start and end time and evaluating for the difference.
 class TimeStamp:
     def __init__(self, **kwargs):
         self.unit_mask = kwargs.get("unit_mask", 1000.0)
@@ -27,3 +30,39 @@ class TimeStamp:
     def get_delta(self):
         self.set_end()
         return self.set_delta()
+
+
+# A Custom Queue class that discards oldest elements.
+class DiscardOldestQueue:
+    def __init__(self, maxsize=3):
+        self.queue = Queue(maxsize=maxsize)
+
+    def put(self, item):
+        try:
+            self.queue.put(item, block=False)
+        except Full:
+            self.queue.get()
+            self.queue.put(item, block=False)
+
+    def get(self, block=True, timeout=None):
+        return self.queue.get(block=block, timeout=timeout)
+
+    def qsize(self):
+        return self.queue.qsize()
+
+    def empty(self):
+        return self.queue.empty()
+
+    def full(self):
+        return self.queue.full()
+
+
+class ListQueue:
+    def __init__(self):
+        self.queue = []
+
+    def put(self, item):
+        self.queue.append(item)
+
+    def get(self):
+        return self.queue.pop(0)

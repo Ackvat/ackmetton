@@ -1,12 +1,21 @@
-from platform import is_python, is_micropython
+from platform import is_cpython, is_micropython
 
-if is_python():
+if is_cpython():
     import os
     import logging
+    from smbus2 import SMBus
+    from queue import Queue
+    import serial
+
+if is_micropython():
+    from machine import UART, I2C, Pin
+    from utils import ListQueue as Queue
 
 from datetime import datetime
 
-from enums import FEED_LEVELS
+import enums
+
+FEED_LEVELS = enums.FEED_LEVELS
 
 
 # The very base class that consist variables and methods that shall be owned by all the other classes in this project library.
@@ -108,9 +117,65 @@ class Logged(Base):
             self.log = LogWrap(self.logger, self.name)
 
 
-test_logger = Logger(logger_name="testlog")
-test = Logged(name="TEST", logger=test_logger)
-test.log.debug("Hello World!")
-test.log.info("Hello World!")
-test.log.warn("Hello World!")
-test.log.error("Hello World!")
+# test_logger = Logger(logger_name="testlog")
+# test = Logged(name="TEST", logger=test_logger)
+# test.log.debug("Hello World!")
+
+
+# The basic module base class for creating electronic modules.
+class Module(Logged):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.open: bool = kwargs.get("open", False)
+        self.running: bool = kwargs.get("running", False)
+
+    def Open(self):
+        self.open = True
+
+    def Close(self):
+        self.open = False
+
+    def Switch(self):
+        self.open = not self.open
+
+    def Run(self):
+        self.running = True
+
+    def Stop(self):
+        self.running = False
+
+
+# A module class with UART communication protocol.
+class UARTBase(Module):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        # For virtual FIFO managing.
+        self.inQueue = kwargs.get("inQueue", Queue())
+        self.outQueue = kwargs.get("outQueue", Queue())
+
+        self.ser = kwargs.get("serial", None)
+        self.port = kwargs.get("port", "/dev/ttyAMA0")
+        self.baudrate = kwargs.get("baudrate", 9600)
+        self.timeout = kwargs.get("timeout", 1)
+        self.parity = kwargs.get("parity", None)
+
+    def OpenSerial(self):
+        self.log.info("UART interface initiating...")
+        if self.ser is None:
+            try:
+                if is_cpython():
+                    self.ser = serial.Serial(
+                        port=self.port,
+                        baudrate=self.baudrate,
+                        timeout=self.timeout,
+                        parity=self.parity,
+                        stopbits=self.stopbits,
+                        bytesize=self.bytesize,
+                    )
+            except Exception as error:
+                self.log.error(
+                    f"An error has occured during UART interface initiation! {error}"
+                )
+                return False

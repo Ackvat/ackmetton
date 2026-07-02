@@ -44,6 +44,7 @@ def amplitude_impedance(f, value, new):
         return new
 
 
+# Vector with two components.
 class Vector2:
     def __init__(self, x, y):
         self.x = x
@@ -124,6 +125,7 @@ class Vector2:
         return Vector2(self.x, self.y)
 
 
+# Vector with 3 components.
 class Vector3:
     def __init__(self, x, y, z):
         self.x = x
@@ -216,6 +218,7 @@ class Vector3:
         return Vector3(self.x, self.y, self.z)
 
 
+# A vector matrix composed of three 3D Vectors that is used to define a coordinate system. Generally a local coordinate system of a component.
 class Basis:
     def __init__(self, x: Vector3, y: Vector3, z: Vector3):
         self.x: Vector3 = x
@@ -225,6 +228,7 @@ class Basis:
         self.n = 3 * 3
 
 
+# Quaternion is a quaternion.
 class Quaternion:
     def __init__(self, x, y, z, w):
         self.x = x
