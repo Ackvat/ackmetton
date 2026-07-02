@@ -1,11 +1,11 @@
-from platform import is_cpython, is_micropython
+from ackmetton.platform import is_cpython, is_micropython
 
 if is_cpython():
     import os
     import logging
-    from smbus2 import SMBus
+    import serial as UART
+    from smbus2 import SMBus as I2C
     from queue import Queue
-    import serial
 
 if is_micropython():
     from machine import UART, I2C, Pin
@@ -13,9 +13,7 @@ if is_micropython():
 
 from datetime import datetime
 
-import enums
-
-FEED_LEVELS = enums.FEED_LEVELS
+from ackmetton.enums import FEED_LEVELS, SERIAL_ENUMS
 
 
 # The very base class that consist variables and methods that shall be owned by all the other classes in this project library.
@@ -113,7 +111,7 @@ class Logged(Base):
         self.logger = kwargs.get("logger", None)
         self.print = kwargs.get("printer", None)
 
-        if self.logger and is_python():
+        if self.logger and is_cpython():
             self.log = LogWrap(self.logger, self.name)
 
 
@@ -130,20 +128,29 @@ class Module(Logged):
         self.open: bool = kwargs.get("open", False)
         self.running: bool = kwargs.get("running", False)
 
-    def Open(self):
+    def Open(self) -> bool:
         self.open = True
+        return True
 
-    def Close(self):
+    def Close(self) -> bool:
         self.open = False
+        return True
 
-    def Switch(self):
+    # NOTE: This one returns a boolean with respect to the current state of the module.
+    def Switch(self) -> bool:
         self.open = not self.open
+        if self.open:
+            return True
+        else:
+            return False
 
     def Run(self):
         self.running = True
+        return True
 
     def Stop(self):
         self.running = False
+        return True
 
 
 # A module class with UART communication protocol.
@@ -152,21 +159,27 @@ class UARTBase(Module):
         super().__init__(**kwargs)
 
         # For virtual FIFO managing.
-        self.inQueue = kwargs.get("inQueue", Queue())
-        self.outQueue = kwargs.get("outQueue", Queue())
+        self.in_queue = kwargs.get("inQueue", Queue())
+        self.out_queue = kwargs.get("outQueue", Queue())
 
+        self.serial_open: bool = False
         self.ser = kwargs.get("serial", None)
         self.port = kwargs.get("port", "/dev/ttyAMA0")
         self.baudrate = kwargs.get("baudrate", 9600)
         self.timeout = kwargs.get("timeout", 1)
-        self.parity = kwargs.get("parity", None)
+        self.parity = kwargs.get("parity", SERIAL_ENUMS.PARITY_NONE)
+        self.stopbits = kwargs.get("stopbits", SERIAL_ENUMS.STOPBITS_ONE)
+        self.bytesize = kwargs.get("bytesize", SERIAL_ENUMS.EIGHTBITS)
 
-    def OpenSerial(self):
-        self.log.info("UART interface initiating...")
+        self.tx = kwargs.get("tx", 0)
+        self.rx = kwargs.get("rx", 1)
+
+    def OpenSerial(self) -> bool:
+        self.log.info("UART interface opening...")
         if self.ser is None:
             try:
                 if is_cpython():
-                    self.ser = serial.Serial(
+                    self.ser = UART.Serial(
                         port=self.port,
                         baudrate=self.baudrate,
                         timeout=self.timeout,
@@ -174,8 +187,69 @@ class UARTBase(Module):
                         stopbits=self.stopbits,
                         bytesize=self.bytesize,
                     )
+                elif is_micropython():
+                    self.ser = UART(
+                        1,
+                        baudrate=self.baudrate,
+                        tx=self.tx,
+                        rx=self.rx,
+                        bits=self.bytesize,
+                        parity=SERIAL_ENUMS.GetMicroParity(self.parity),
+                        stop=self.stopbits,
+                    )
+                self.log.info("UART interface initiated successfully.")
+                self.log.info(
+                    f"Adress: {self.port} | TX: {self.tx} | RX: {self.rx} with {self.baudrate} baudrate."
+                )
+                self.serial_open = True
+                return True
             except Exception as error:
                 self.log.error(
                     f"An error has occured during UART interface initiation! {error}"
+                )
+                self.serial_open = False
+                return False
+        else:
+            if not self.serial_open:
+                try:
+                    if is_cpython():
+                        self.ser.open()
+                    elif is_micropython():
+                        # HACK: No need for this for now.
+                        pass
+                    self.ser.flush()
+                    self.log.info("UART interface was found and started.")
+                    self.serial_open = True
+                    return True
+                except Exception as error:
+                    self.log.error(
+                        f"UART interface was found but an error has occured while starting it! {error}"
+                    )
+                    return False
+            else:
+                self.log.warn("UART interface already exists and is open.")
+                self.serial_open = True
+                return True
+
+    def CloseSerial(self):
+        self.log.info("UART interface is closing...")
+        if self.ser is None:
+            self.log.warn("There were no UART interface found to close.")
+            self.serial_open = False
+            return True
+        else:
+            try:
+                if is_cpython():
+                    self.ser.close()
+                elif is_micropython():
+                    # HACK: No need for this for now.
+                    pass
+                self.ser = None
+                self.log.info("UART interface was found and closed.")
+                self.serial_open = False
+                return True
+            except Exception as error:
+                self.log.error(
+                    f"UART interface was found but an error occured while closing it! {error}"
                 )
                 return False

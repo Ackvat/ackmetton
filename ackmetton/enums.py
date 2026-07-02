@@ -1,4 +1,9 @@
-class SERIAL_VALUES:
+class SERIAL_ENUMS:
+    @staticmethod
+    def GetMicroParity(parity):
+        return SERIAL_ENUMS.MICRO_PARITIES.get(parity)
+
+    # For CPython.
     PARITY_NONE, PARITY_EVEN, PARITY_ODD, PARITY_MARK, PARITY_SPACE = (
         "N",
         "E",
@@ -17,6 +22,9 @@ class SERIAL_VALUES:
         PARITY_MARK: "Mark",
         PARITY_SPACE: "Space",
     }
+
+    # For MicroPython.
+    MICRO_PARITIES = {"N": None, "E": 0, "O": 1, "M": None, "S": None}
 
 
 class FEED_LEVELS:
