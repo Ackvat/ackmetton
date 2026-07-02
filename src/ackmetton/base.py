@@ -21,11 +21,14 @@ class Base:
     def __init__(self, **kwargs):
         self.name = kwargs.get("name", "NONAME")
 
+        # This is here to keep conditioning to have as less steps as possible later on.
+        self.is_cpython = is_cpython()
+
 
 # A general logger that can be used by multiple classes at the same time. The classes log with their names through the logger via a wrapper set below.
 class Logger(Base):
     def __init__(self, **kwargs):
-        if is_micropython():
+        if not self.is_cpython:
             raise ImportError(
                 "Logger unavailable on MicroPython, requires stdlib 'logging'"
             )
@@ -103,16 +106,47 @@ class Printer(Base):
                 )
             )
 
+    def info(self, msg):
+        if self.printer_level >= FEED_LEVELS.INFO:
+            print(
+                self.format(
+                    time=self.time_now(),
+                    level="INFO",
+                    msg=msg,
+                )
+            )
+
+    def warn(self, msg):
+        if self.printer_level >= FEED_LEVELS.WARNING:
+            print(
+                self.format(
+                    time=self.time_now(),
+                    level="WARN",
+                    msg=msg,
+                )
+            )
+
+    def error(self, msg):
+        if self.printer_level >= FEED_LEVELS.ERROR:
+            print(
+                self.format(
+                    time=self.time_now(),
+                    level="ERROR",
+                    msg=msg,
+                )
+            )
+
 
 # The very first class that is capable of printing and logging.
 class Logged(Base):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.logger = kwargs.get("logger", None)
-        self.print = kwargs.get("printer", None)
 
-        if self.logger and is_cpython():
+        if self.logger and self.is_cpython:
             self.log = LogWrap(self.logger, self.name)
+
+        self.print = kwargs.get("printer", Printer(printer_name=self.name))
 
 
 # test_logger = Logger(logger_name="testlog")
@@ -174,11 +208,18 @@ class UARTBase(Module):
         self.tx = kwargs.get("tx", 0)
         self.rx = kwargs.get("rx", 1)
 
-    def OpenSerial(self) -> bool:
+    def Show_Port(self, show_method):
+        msg = f"Adress: {self.port} | TX: {self.tx} | RX: {self.rx} with {self.baudrate} baudrate."
+        if show_method == "log" and self.is_cpython:
+            self.log.info(msg)
+        elif show_method == "print":
+            self.print.info(msg)
+
+    def Open_Serial(self) -> bool:
         self.log.info("UART interface opening...")
         if self.ser is None:
             try:
-                if is_cpython():
+                if self.is_cpython:
                     self.ser = UART.Serial(
                         port=self.port,
                         baudrate=self.baudrate,
@@ -187,7 +228,7 @@ class UARTBase(Module):
                         stopbits=self.stopbits,
                         bytesize=self.bytesize,
                     )
-                elif is_micropython():
+                else:
                     self.ser = UART(
                         1,
                         baudrate=self.baudrate,
@@ -198,9 +239,7 @@ class UARTBase(Module):
                         stop=self.stopbits,
                     )
                 self.log.info("UART interface initiated successfully.")
-                self.log.info(
-                    f"Adress: {self.port} | TX: {self.tx} | RX: {self.rx} with {self.baudrate} baudrate."
-                )
+                self.Show_Port("log")
                 self.serial_open = True
                 return True
             except Exception as error:
@@ -212,13 +251,13 @@ class UARTBase(Module):
         else:
             if not self.serial_open:
                 try:
-                    if is_cpython():
+                    if self.is_cpython:
                         self.ser.open()
-                    elif is_micropython():
-                        # HACK: No need for this for now.
+                    else:
                         pass
                     self.ser.flush()
                     self.log.info("UART interface was found and started.")
+                    self.Show_Port("log")
                     self.serial_open = True
                     return True
                 except Exception as error:
@@ -228,10 +267,11 @@ class UARTBase(Module):
                     return False
             else:
                 self.log.warn("UART interface already exists and is open.")
+                self.Show_Port("log")
                 self.serial_open = True
                 return True
 
-    def CloseSerial(self):
+    def Close_Serial(self):
         self.log.info("UART interface is closing...")
         if self.ser is None:
             self.log.warn("There were no UART interface found to close.")
@@ -239,13 +279,13 @@ class UARTBase(Module):
             return True
         else:
             try:
-                if is_cpython():
+                if self.is_cpython:
                     self.ser.close()
-                elif is_micropython():
-                    # HACK: No need for this for now.
-                    pass
+                else:
+                    self.ser.deinit()
                 self.ser = None
                 self.log.info("UART interface was found and closed.")
+
                 self.serial_open = False
                 return True
             except Exception as error:
@@ -253,3 +293,42 @@ class UARTBase(Module):
                     f"UART interface was found but an error occured while closing it! {error}"
                 )
                 return False
+
+    def Change_Serial(self):
+        self.log.info("UART interface is getting changed...")
+        if self.Close_Serial():
+            # TODO: To be added.
+            pass
+
+    def Write(self, data, new_line=True):
+        if new_line:
+            data += "\n"
+        self.ser.write(data.encode("utf-8"))
+        return True
+
+    def Read(self, size=1):
+        data = self.ser.read(size)
+        if data:
+            return data
+        else:
+            return None
+
+    def ReadLine(self, size=1):
+        data = self.ser.read(size).decode("utf-8").strip()
+        if data:
+            return data
+        else:
+            return None
+
+
+class I2CBase(Module):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+        self.queue = Queue()
+
+        # TODO: Add specific pins and ports as dynamic and enumerated values.
+        if self.is_cpython:
+            self.i2c = I2C(1)
+        else:
+            self.i2c = I2C(0, 1, 2)
