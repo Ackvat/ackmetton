@@ -37,3 +37,21 @@ class FEED_LEVELS:
     CRIT = 50
     CRITICAL = 50
     FATAL = 50
+
+
+class DEVS:
+    class RPI:
+        class PINS:
+            UART0 = "/dev/ttyAMA0"
+
+            I2C_ID = 1
+
+    class RPI_PICO:
+        class PINS:
+            TX = 0
+            RX = 1
+
+            SDA = 16
+            SCL = 17
+
+            I2C_ID = 0

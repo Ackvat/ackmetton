@@ -9,11 +9,11 @@ if is_cpython():
 
 if is_micropython():
     from machine import UART, I2C, Pin
-    from utils import ListQueue as Queue
+    from utils import List_Queue as Queue
 
 from datetime import datetime
 
-from ackmetton.enums import FEED_LEVELS, SERIAL_ENUMS
+from ackmetton.enums import FEED_LEVELS, SERIAL_ENUMS, DEVS
 
 
 # The very base class that consist variables and methods that shall be owned by all the other classes in this project library.
@@ -28,12 +28,13 @@ class Base:
 # A general logger that can be used by multiple classes at the same time. The classes log with their names through the logger via a wrapper set below.
 class Logger(Base):
     def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
         if not self.is_cpython:
             raise ImportError(
                 "Logger unavailable on MicroPython, requires stdlib 'logging'"
             )
 
-        super().__init__(**kwargs)
         self.logger_name: str = kwargs.get("logger_name", "nonamelog").strip().lower()
         self.logger = kwargs.get("logger", logging.getLogger(self.logger_name))
 
@@ -69,7 +70,7 @@ class Logger(Base):
 
 
 # This is the logger wrapper that allows easy calling of the logger functions from classes equal ro higher than Adem.
-class LogWrap:
+class Log_Wrap:
     def __init__(self, logger, name):
         self._logger = logger
         self._name = name
@@ -82,6 +83,20 @@ class LogWrap:
 
             return wrapper
         raise AttributeError(f"'{type(self).__name__}' has no method '{level}'")
+
+
+class Logger_Silent:
+    def debug(self, msg):
+        pass
+
+    def info(self, msg):
+        pass
+
+    def warn(self, msg):
+        pass
+
+    def error(self, msg):
+        pass
 
 
 class Printer(Base):
@@ -144,14 +159,11 @@ class Logged(Base):
         self.logger = kwargs.get("logger", None)
 
         if self.logger and self.is_cpython:
-            self.log = LogWrap(self.logger, self.name)
+            self.log = Log_Wrap(self.logger, self.name)
+        else:
+            self.log = Logger_Silent()
 
         self.print = kwargs.get("printer", Printer(printer_name=self.name))
-
-
-# test_logger = Logger(logger_name="testlog")
-# test = Logged(name="TEST", logger=test_logger)
-# test.log.debug("Hello World!")
 
 
 # The basic module base class for creating electronic modules.
@@ -188,7 +200,7 @@ class Module(Logged):
 
 
 # A module class with UART communication protocol.
-class UARTBase(Module):
+class UART_Base(Module):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
@@ -205,8 +217,12 @@ class UARTBase(Module):
         self.stopbits = kwargs.get("stopbits", SERIAL_ENUMS.STOPBITS_ONE)
         self.bytesize = kwargs.get("bytesize", SERIAL_ENUMS.EIGHTBITS)
 
-        self.tx = kwargs.get("tx", 0)
-        self.rx = kwargs.get("rx", 1)
+        # I defaulted for RPI Pico
+        self.tx = kwargs.get("tx", DEVS.RPI_PICO.PINS.TX)
+        self.rx = kwargs.get("rx", DEVS.RPI_PICO.PINS.RX)
+
+    def can_com(self):
+        return self.open and self.serial_open
 
     def Show_Port(self, show_method):
         msg = f"Adress: {self.port} | TX: {self.tx} | RX: {self.rx} with {self.baudrate} baudrate."
@@ -301,34 +317,140 @@ class UARTBase(Module):
             pass
 
     def Write(self, data, new_line=True):
-        if new_line:
-            data += "\n"
-        self.ser.write(data.encode("utf-8"))
-        return True
+        if self.can_com() and (self.ser is not None):
+            if new_line:
+                data += "\n"
+            self.ser.write(data.encode("utf-8"))
+            return True
 
     def Read(self, size=1):
-        data = self.ser.read(size)
-        if data:
-            return data
-        else:
-            return None
+        if self.can_com() and (self.ser is not None):
+            data = self.ser.read(size)
+            if data:
+                return data
+            else:
+                return None
 
-    def ReadLine(self, size=1):
-        data = self.ser.read(size).decode("utf-8").strip()
-        if data:
-            return data
-        else:
-            return None
+    def Read_Line(self, size=1):
+        if self.can_com() and (self.ser is not None):
+            data = self.ser.read(size)
+            if data:
+                data = data.decode("utf-8").strip()
+                return data
+            else:
+                return None
+
+    def Read_All(self):
+        if self.can_com() and (self.ser is not None):
+            if self.is_cpython:
+                size = self.ser.in_waiting
+            else:
+                size = self.ser.any()
+            data = self.ser.read(size) if size else None
+            if data:
+                return data
+            else:
+                return None
 
 
-class I2CBase(Module):
+class I2C_Base(Module):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
         self.queue = Queue()
 
+        if self.is_cpython:
+            self.id = kwargs.get("id", DEVS.RPI.PINS.I2C_ID)
+        else:
+            self.id = kwargs.get("id", DEVS.RPI_PICO.PINS.I2C_ID)
+            self.sda = Pin(kwargs.get("sda", DEVS.RPI_PICO.PINS.SDA))
+            self.scl = Pin(kwargs.get("scl", DEVS.RPI_PICO.PINS.SCL))
+            # Frequency of the I2C bus for CPython (e.g. Raspberry Pi SoCs) requires to be set on startup as boot params.
+            self.freq = kwargs.get("freq", 400000)
+        self.timeout = kwargs.get("timeout", 50000)
+
         # TODO: Add specific pins and ports as dynamic and enumerated values.
         if self.is_cpython:
-            self.i2c = I2C(1)
+            self.i2c = I2C(self.id)
+
+            self.Read_Byte = self.cpython_Read_Byte
+            self.Read_Byte_Data = self.cpython_Read_Byte_Data
+            self.Read_Block_Data = self.cpython_Read_Block_Data
+            self.Write_Byte = self.cpython_Write_Byte
+            self.Write_Byte_Data = self.cpython_Write_Byte_Data
+            self.Write_Block_Data = self.cpython_Write_Block_Data
         else:
-            self.i2c = I2C(0, 1, 2)
+            self.i2c = I2C(self.id, self.scl, self.sda)
+
+            self.Read_Byte = self.micropython_Read_Byte
+            self.Read_Byte_Data = self.micropython_Read_Byte_Data
+            self.Read_Block_Data = self.micropython_Read_Block_Data
+            self.Write_Byte = self.micropython_Write_Byte
+            self.Write_Byte_Data = self.micropython_Write_Byte_Data
+            self.Write_Block_Data = self.micropython_Write_Block_Data
+
+    def cpython_Read_Byte(self, dev_address):
+        read_data = self.i2c.read_byte(dev_address)
+        if read_data:
+            return read_data
+        else:
+            return None
+
+    def cpython_Read_Byte_Data(self, dev_address, reg_address):
+        read_data = self.i2c.read_byte_data(dev_address, reg_address)
+        if read_data:
+            return read_data
+        else:
+            return None
+
+    def cpython_Read_Block_Data(self, dev_address, reg_address, size):
+        read_data = self.i2c.read_i2c_block_data(dev_address, reg_address, size)
+        if read_data:
+            return read_data
+        else:
+            return None
+
+    def cpython_Write_Byte(self, dev_address, data):
+        self.i2c.write_byte(dev_address, data)
+        return True
+
+    def cpython_Write_Byte_Data(self, dev_address, reg_address, data):
+        self.i2c.write_byte_data(dev_address, reg_address, data)
+        return True
+
+    def cpython_Write_Block_Data(self, dev_address, reg_address, data):
+        self.i2c.write_i2c_block_data(dev_address, reg_address, data)
+        return True
+
+    def micropython_Read_Byte(self, dev_address):
+        read_data = self.i2c.readfrom(dev_address, 1)
+        if read_data:
+            return read_data[0]
+        else:
+            return None
+
+    def micropython_Read_Byte_Data(self, dev_address, reg_address):
+        read_data = self.i2c.readfrom_mem(dev_address, reg_address, 1)
+        if read_data:
+            return read_data[0]
+        else:
+            return None
+
+    def micropython_Read_Block_Data(self, dev_address, reg_address, size):
+        read_data = self.i2c.readfrom_mem(dev_address, reg_address, size)
+        if read_data:
+            return read_data
+        else:
+            return None
+
+    def micropython_Write_Byte(self, dev_address, data):
+        self.i2c.writeto(dev_address, bytes([data]))
+        return True
+
+    def micropython_Write_Byte_Data(self, dev_address, reg_address, data):
+        self.i2c.writeto_mem(dev_address, reg_address, bytes([data]))
+        return True
+
+    def micropython_Write_Block_Data(self, dev_address, reg_address, data):
+        self.i2c.writeto_mem(dev_address, reg_address, data)
+        return True
